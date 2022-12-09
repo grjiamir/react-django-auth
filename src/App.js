@@ -1,24 +1,30 @@
-import logo from './logo.svg';
-import './App.css';
+import { Route, Routes } from "react-router-dom";
+import RequireAuth from "./auth/components/RequireAuth";
+import Home from "./example/Home";
+import Layout from "./example/Layout";
+import Login from "./example/Login";
+import Private from "./example/Private";
+import Unauthorized from "./example/Unauthorized";
+
 
 function App() {
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Routes>
+      <Route path='/' element={<Layout />} >
+        <Route path="login" element={<Login />} />
+
+        <Route element={<RequireAuth />}>
+          <Route path="/" element={<Home />} />
+        </Route>
+
+        <Route element={<RequireAuth permissins={["add_group", "view_group"]} />}>
+          <Route path="private" element={<Private />} />
+        </Route>
+
+        <Route path="unauthorized" element={<Unauthorized />} />
+      </Route>
+    </Routes>
   );
 }
 

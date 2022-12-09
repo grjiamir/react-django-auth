@@ -1,70 +1,168 @@
-# Getting Started with Create React App
+# React Authorization role-based and Django oAuth toolkit
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Usage
 
-## Available Scripts
+1. Copy auth folder from `./src/auth` to your project.
+2. Add `AuthProvider` and `Router` to index.js
 
-In the project directory, you can run:
+```jsx
+import { AuthProvider } from "./auth/contexts/AuthContext";
+```
 
-### `npm start`
+```jsx
+<BrowserRouter>
+  <AuthProvider>
+    <Routes>
+      <Route path="/*" element={<App />} />
+    </Routes>
+  </AuthProvider>
+</BrowserRouter>
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+3. Edit the default values in the `auth/env.js`
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```jsx
+import axios from "axios";
 
-### `npm test`
+// localStorage key - default = user
+export const LOCAL_STORAGE_KEY = "user";
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+// axios
+export const AXIOS = axios;
 
-### `npm run build`
+// login url django oAuth2
+export const LOGIN_URL = "";
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+// Get user information from django api
+export const GET_USER_INFO_URL = "";
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+// client_id and client_secret oAth2 application
+export const CLIENT_ID = "";
+export const CLIENT_SECRET = "";
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### React Protected Routes. `RequireAuth`
 
-### `npm run eject`
+```jsx
+import RequireAuth from "./auth/components/RequireAuth";
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+```jsx
+<Routes>
+  <Route path="/" element={<Layout />}>
+    <Route path="login" element={<Login />} />
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+    <Route element={<RequireAuth />}>
+      <Route path="/" element={<Home />} />
+    </Route>
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+    <Route element={<RequireAuth permissins={["add_group", "view_group"]} />}>
+      <Route path="private" element={<Private />} />
+    </Route>
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+    <Route path="unauthorized" element={<Unauthorized />} />
+  </Route>
+</Routes>
+```
 
-## Learn More
+### Use of user information in components.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```jsx
+import { useAuthContext } from "../auth/hooks/useAuthContext";
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```jsx
+const { user } = useAuthContext();
+```
 
-### Code Splitting
+| Property        | Description                                                                | Type      | Default |
+| --------------- | -------------------------------------------------------------------------- | --------- | ------- |
+| isAuthenticated | This value is true if the user is logged in                                | `boolean` | false   |
+| token           | A token received from Django that you can send to the server for requests. | `string`  | null    |
+| info            | User information such as first name, last name, email and etc              | `object`  | {}      |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+#### Example:
 
-### Analyzing the Bundle Size
+```jsx
+import { useAuthContext } from "../auth/hooks/useAuthContext";
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+function Home() {
+  const { user } = useAuthContext();
 
-### Making a Progressive Web App
+  return (
+    <div>
+      <h1>Home</h1>
+      <p>{user?.isAutenticated && user.info.phone}</p>
+    </div>
+  );
+}
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+export default Home;
+```
 
-### Advanced Configuration
+## User Login
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+```jsx
+import { useLogin } from "../auth/hooks/useLogin";
+```
 
-### Deployment
+```jsx
+const { login, isLoading, error } = useLogin();
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+```jsx
+login("username", "password");
+```
 
-### `npm run build` fails to minify
+# Django API example
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## Serializers
+
+```python
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'phone']
+
+
+class UserPermissionsSerializer(serializers.ModelSerializer):
+    user_permissions = serializers.SerializerMethodField("get_user_permissions")
+
+    class Meta:
+        model = User
+        fields = ['user_permissions']
+
+    def get_user_permissions(self, obj):
+        if obj.is_superuser:
+            return "__all__"
+        if not obj.user_permissions.all().count() > 0:
+            return None
+        perms_list = []
+        for p in obj.user_permissions.all():
+            perms_list.append(p.codename)
+        return perms_list
+```
+
+## APIView
+
+```python
+class GetUserInformation(APIView):
+
+    def get(self, request):
+        if request.user:
+            serializer = UserSerializer(instance=request.user)
+            perm_serializer = UserPermissionsSerializer(instance=request.user)
+            data = {
+                'info': serializer.data,
+                'user_permissions': perm_serializer.data['user_permissions']
+            }
+            return Response(data)
+        return Response({'message': 'User not found!'}, status=400)
+```
+
+# Tasks
+
+- [ ] Add django group permissions
+- [ ] Handle request errors
+- [ ] Add Signup
+- [ ] Create dependency
